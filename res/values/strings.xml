@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Wave Launcher</string>
+    <string name="settings_title">Wave Launcher settings</string>
+    <string name="accessibility_description">Lets Wave Launcher lock the screen when you double-tap a letter on the alphabet rail. Nothing else is observed.</string>
+</resources>
