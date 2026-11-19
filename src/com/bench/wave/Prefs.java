@@ -22,6 +22,7 @@ final class Prefs {
     static final String K_FONT_CLOCK = "font_clock"; // absolute file paths, empty = bundled
     static final String K_FONT_APPS = "font_apps";
     static final String K_FONT_UI = "font_ui";
+    static final String K_REVISION = "lib_rev";       // bumped whenever the library changes
     static final String K_USAGE = "usage";          // "component<TAB>epochMillis" lines, newest first
 
     private Prefs() {}
@@ -139,6 +140,21 @@ final class Prefs {
             }
         }
         sp(c).edit().putString(K_USAGE, sb.toString()).apply();
+    }
+
+    /**
+     * Marks the app library as changed from outside the launcher (settings, for one).
+     * The launcher watches this counter and reloads instead of trusting its stale list.
+     */
+    static void bumpLibrary(Context c) {
+        // Monotonic counter, written synchronously: two changes in the same millisecond
+        // must still produce two distinct revisions.
+        long next = sp(c).getLong(K_REVISION, 0L) + 1L;
+        sp(c).edit().putLong(K_REVISION, next).commit();
+    }
+
+    static long libraryRevision(Context c) {
+        return sp(c).getLong(K_REVISION, 0L);
     }
 
     static void putList(Context c, String key, Iterable<String> keys) {

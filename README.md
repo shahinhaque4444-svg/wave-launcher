@@ -1,52 +1,49 @@
 Wave Launcher
 
-A two-screen Android launcher: a home screen with the clock, the date and a column of
-favorites, and a separate alphabetical app list reached from the wave on the right edge.
-Own package (`com.bench.wave`), own signature, built from source on the phone.
+A two-screen Android launcher: home shows the clock, date and a favorites column; the
+app list lives on its own screen behind the alphabet wave on the right edge. Own
+package `com.bench.wave`, own signature, no dependencies, built on the phone.
 
 Home
-- Clock and date, favorites below (44dp icons, 56dp rows).
-- Tap a favorite to open it, long-press for the app menu.
-- Swipe up on empty favorites for search.
-- Pull down from the favorites for the notification shade (needs the accessibility service).
-- Long-press empty space for settings.
+- Clock and date, favorites below. Tap to open, long-press for the app sheet.
+- Swipe up on empty favorites: search. Pull down: notification shade.
+- Long-press empty space: settings.
 
 App list
-- Opened by tapping the wave, or dragging it.
-- Sections A–Z inline; the letter under your finger is picked out on the wave.
-- Drag to scroll, flick to coast. Touch a moving list and it stops. Both directions alike.
-- Tap a letter: that section settles in the middle of the screen.
-- The app you used last in a section moves to the top of that section.
-- Double-tap a letter to lock the device.
+- Open it by tapping the wave or dragging it. Star at the top goes home, back too.
+- Tap a letter: that section centres on screen. Double-tap: lock the device.
+- Flick to scroll, both directions. Touching a moving list stops it.
+- Last app opened in a section moves to the top of that section.
 - Long-press a row for favorites, custom icon, app info, hide, uninstall.
-- Back or the star at the top returns home.
+
+Gestures that need accessibility
+- Double-tap a letter locks the screen (`GLOBAL_ACTION_LOCK_SCREEN`).
+- Pull down from favorites opens the shade (`GLOBAL_ACTION_NOTIFICATIONS`).
+- Enable in Settings > Accessibility. Nothing else is observed.
 
 Settings
-- Theme, text size, wallpaper dim.
-- Clock, icons, labels, wave alphabet and side.
-- Separate fonts for the clock, app names and interface.
-- Accessibility state and a direct link to the toggle.
+- Appearance: theme, text size, wallpaper dim.
+- Home screen: clock, icons, favorite labels.
+- App list: wave rail, left-handed rail.
+- Library: clear favorites, restore hidden apps.
+- Fonts: separate files for clock, app names, interface.
+- Gestures & lock: accessibility state.
+- About: default launcher, reset icons.
 
-Build
+Build and install
 ```
 bash build.sh
+su -c "pm install -r -g WaveLauncher-1.1.apk"
 ```
-Needs `apktool`, `aapt2`, `d8`, `apksigner`, `openjdk-21` in Termux, and a framework
-resource table (`apktool if framework-res.apk`). Output `WaveLauncher-1.0.apk`, signed
-with `wave.jks` (alias `wave`, password `wave-launcher`, created on first build).
-
-Install
-```
-su -c "pm install -r -g WaveLauncher-1.0.apk"
-```
-Then set it as the Home app, and switch it on in Accessibility if you want the
-double-tap lock and the shade gesture.
+Needs `apktool`, `aapt2`, `d8`, `apksigner`, `openjdk-21` in Termux and a framework
+resource table (`apktool if framework-res.apk`). Signs with `wave.jks` (alias `wave`,
+password `wave-launcher`), created on first build.
 
 Source
-- `HomeActivity.java` – activity, app loading, search, menus, routing
+- `HomeActivity.java` – activity, app loading, search sheet, app menu, uninstall
 - `HomeView.java` – both screens on one canvas, all gestures
-- `AppRepo.java` / `AppEntry.java` – app list, favorites, hidden set, ordering
-- `IconLoader.java` – icon cache, custom icons
-- `Typefaces.java` / `Prefs.java` – fonts, persisted state
+- `AppRepo.java` – installed apps, favorites, hidden set, ordering
+- `IconLoader.java` – icon cache and custom icons
+- `Typefaces.java`, `Prefs.java` – fonts, persisted state
 - `WaveLockService.java` – accessibility service for lock and shade
 - `SettingsActivity.java` – settings screen

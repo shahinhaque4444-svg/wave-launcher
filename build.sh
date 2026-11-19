@@ -35,8 +35,8 @@ aapt2 link \
   --java "$OUT/gen" \
   --min-sdk-version "$MIN_SDK" \
   --target-sdk-version "$TARGET_SDK" \
-  --version-code 1 \
-  --version-name 1.0 \
+  --version-code 2 \
+  --version-name 1.1 \
   "$OUT/res.zip"
 
 echo "[3/6] javac"
@@ -67,7 +67,7 @@ fi
 apksigner sign --ks "$KEYSTORE" --ks-key-alias "$ALIAS" \
   --ks-pass "pass:$PASS" --key-pass "pass:$PASS" \
   --min-sdk-version "$MIN_SDK" \
-  --out "$ROOT/WaveLauncher-1.0.apk" "$OUT/aligned.apk"
+  --out "$ROOT/WaveLauncher-1.1.apk" "$OUT/aligned.apk"
 
-apksigner verify --min-sdk-version "$MIN_SDK" "$ROOT/WaveLauncher-1.0.apk" && echo "signed OK"
-echo "apk: $ROOT/WaveLauncher-1.0.apk"
+apksigner verify --min-sdk-version "$MIN_SDK" "$ROOT/WaveLauncher-1.1.apk" && echo "signed OK"
+echo "apk: $ROOT/WaveLauncher-1.1.apk"

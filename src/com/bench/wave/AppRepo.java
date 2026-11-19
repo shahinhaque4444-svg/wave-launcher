@@ -190,17 +190,20 @@ final class AppRepo {
         Collections.addAll(favs, Prefs.list(ctx, Prefs.K_FAVORITES));
         favs.remove(e.key);
         Prefs.putList(ctx, Prefs.K_FAVORITES, favs);
+        Prefs.bumpLibrary(ctx);
 
         load();
     }
 
     void resetFavorites() {
         Prefs.sp(ctx).edit().putString(Prefs.K_FAVORITES, "").apply();
+        Prefs.bumpLibrary(ctx);
         this.favorites = Collections.emptyList();
     }
 
     void resetHidden() {
         Prefs.sp(ctx).edit().putString(Prefs.K_HIDDEN, "").apply();
+        Prefs.bumpLibrary(ctx);
         load();
     }
 
