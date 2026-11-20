@@ -41,6 +41,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.PopupMenu;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -139,7 +140,9 @@ public class HomeActivity extends Activity implements HomeView.Host {
         // so this receiver lives for the whole activity, not just the visible window.
         IntentFilter uninstallFilter = new IntentFilter(ACTION_UNINSTALLED);
         if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(uninstallWatcher, uninstallFilter, 4); // RECEIVER_NOT_EXPORTED
+            // EXPORTED: the installer answers from outside this process. The action is
+            // package-scoped to us and the callback only refreshes a list.
+            registerReceiver(uninstallWatcher, uninstallFilter, 2);
         } else {
             registerReceiver(uninstallWatcher, uninstallFilter);
         }
@@ -643,16 +646,31 @@ public class HomeActivity extends Activity implements HomeView.Host {
         });
         card.addView(cancel);
 
-        frame.addView(card);
+        ScrollView scroller = new ScrollView(this);
+        scroller.setVerticalScrollBarEnabled(false);
+        scroller.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        scroller.setClipToPadding(false);
+        scroller.addView(card, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        frame.addView(scroller, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         sheet.setContentView(frame);
 
         card.setTranslationY(px(48));
         card.setAlpha(0f);
         sheet.show();
+
+        // Measure once so the window takes the sheet's real height, capped short of the
+        // navigation bar; anything longer scrolls instead of running off the screen.
+        int available = getResources().getDisplayMetrics().widthPixels - px(16);
+        card.measure(View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        int ceiling = Math.round(getResources().getDisplayMetrics().heightPixels * 0.90f);
+        int height = Math.min(card.getMeasuredHeight() + px(8), ceiling);
+
         Window shown = sheet.getWindow();
         if (shown != null) {
-            shown.setLayout(WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.WRAP_CONTENT);
+            shown.setLayout(WindowManager.LayoutParams.MATCH_PARENT, height);
         }
         card.animate().translationY(0f).alpha(1f).setDuration(190)
                 .setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
@@ -688,7 +706,9 @@ public class HomeActivity extends Activity implements HomeView.Host {
         row.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 sheet.dismiss();
-                v.postDelayed(new Runnable() {
+                // Post on the activity handler, never on the row: the row is detached the
+                // moment the dialog closes and its own queue would be dropped.
+                main.postDelayed(new Runnable() {
                     @Override public void run() { action.run(); }
                 }, 140);
             }
