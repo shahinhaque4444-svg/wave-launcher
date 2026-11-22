@@ -23,7 +23,8 @@ final class Prefs {
     static final String K_FONT_APPS = "font_apps";
     static final String K_FONT_UI = "font_ui";
     static final String K_REVISION = "lib_rev";       // bumped whenever the library changes
-    static final String K_THEME_ID = "theme_id";      // built-in name or imported folder name
+    static final String K_THEME_ID = "theme_id";      // last preset id applied
+    static final String K_THEME_JSON = "theme_json";  // the whole active theme, edited in place
     static final String K_WEATHER = "weather_cache";  // "23|Dhaka|<millis>"
     static final String K_WEATHER_PLACE = "weather_place";
     static final String K_USAGE = "usage";          // "component<TAB>epochMillis" lines, newest first
@@ -51,6 +52,7 @@ final class Prefs {
     static boolean waveLeft(Context c) { return sp(c).getBoolean(K_WAVE_LEFT, false); }
 
     static boolean weather(Context c) { return sp(c).getBoolean("weather", true); }
+    static boolean date(Context c) { return sp(c).getBoolean("date", true); }
 
     static float scale(Context c) { return sp(c).getInt(K_SCALE, 100) / 100f; }
     static int dim(Context c) { return sp(c).getInt(K_DIM, 34); }

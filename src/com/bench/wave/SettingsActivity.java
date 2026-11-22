@@ -115,7 +115,7 @@ public class SettingsActivity extends Activity {
         column.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("v1.2  \u00b7  com.bench.wave");
+        sub.setText("v1.3  \u00b7  com.bench.wave");
         sub.setTextSize(11.5f);
         sub.setTextColor(DIM);
         sub.setPadding(0, dp(6), 0, 0);
@@ -136,6 +136,13 @@ public class SettingsActivity extends Activity {
 
         row(card, "Theme", Theme.current(this).name, new View.OnClickListener() {
             @Override public void onClick(View v) { pickTheme(); }
+        });
+        divider(card);
+        action(card, "Edit theme", "Icons, clock, colours, what is on screen", false,
+                new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(SettingsActivity.this, ThemeEditorActivity.class));
+            }
         });
         divider(card);
         action(card, "Import theme", "A .zip with a theme.json inside", false,

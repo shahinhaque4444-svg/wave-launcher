@@ -93,7 +93,10 @@ final class HomeView extends View {
     private float leftMargin, labelX, headerX, iconSize, rowPitch, sectionH;
     private float clockBaseline, dateBaseline, favTop;
     private float railTop, railBottom, railX, fabRadius, fabCx, fabCy;
-    private boolean clockOn, iconsOn, labelsOn, waveOn, waveLeft;
+    private boolean clockOn, iconsOn, labelsOn, waveOn, waveLeft, dateOn;
+    private String clockLayout = "classic";
+    private String clockAlign = "left";
+    private float contentLeft, contentRight;
 
     private int mode = MODE_HOME;
     private float transition;             // 0 = home, 1 = app list
@@ -177,6 +180,70 @@ final class HomeView extends View {
         invalidate();
     }
 
+    /**
+     * Clock, date and temperature. The arrangement and alignment come from the theme, so
+     * a saved look keeps its own typography without touching this code.
+     */
+    private void drawClock(Canvas canvas, Paint text, float alpha) {
+        Paint.Align align = "center".equals(clockAlign) ? Paint.Align.CENTER
+                : "right".equals(clockAlign) ? Paint.Align.RIGHT : Paint.Align.LEFT;
+        float anchor = "center".equals(clockAlign) ? (contentLeft + contentRight) / 2f
+                : "right".equals(clockAlign) ? contentRight : contentLeft;
+
+        text.setTypeface(tfClock);
+        text.setTextAlign(align);
+        text.setTextSize(sp(52 * clockScale));
+        text.setLetterSpacing(clockSpacing);
+        text.setColor(cFg);
+        text.setAlpha((int) (246 * alpha));
+
+        if ("stacked".equals(clockLayout) && dateOn) {
+            // Date above the time, small and spaced out, the way a stacked face reads.
+            text.setTypeface(tfRegular);
+            text.setTextSize(sp(12));
+            text.setLetterSpacing(0.18f);
+            text.setAlpha((int) (185 * alpha));
+            canvas.drawText(dateText.toUpperCase(Locale.ENGLISH), anchor, dateBaseline, text);
+
+            text.setTypeface(tfClock);
+            text.setTextSize(sp(58 * clockScale));
+            text.setLetterSpacing(clockSpacing);
+            text.setAlpha((int) (246 * alpha));
+            canvas.drawText(clockText, anchor, clockBaseline, text);
+            text.setLetterSpacing(0f);
+        } else {
+            canvas.drawText(clockText, anchor, clockBaseline, text);
+            text.setLetterSpacing(0f);
+
+            if (dateOn && "inline".equals(clockLayout)) {
+                // Same baseline, pushed past the time with a fixed gap.
+                float width = text.measureText(clockText);
+                float gap = dp(14);
+                float x = "center".equals(clockAlign) ? anchor + width / 2f + gap
+                        : "right".equals(clockAlign) ? anchor - width - gap : anchor + width + gap;
+                text.setTypeface(tfRegular);
+                text.setTextSize(sp(14));
+                text.setAlpha((int) (200 * alpha));
+                canvas.drawText(dateText, x, dateBaseline, text);
+            } else if (dateOn && !"time".equals(clockLayout)) {
+                text.setTypeface(tfRegular);
+                text.setTextSize(sp(15));
+                text.setAlpha((int) (205 * alpha));
+                canvas.drawText(dateText, anchor, dateBaseline, text);
+            }
+        }
+
+        if (weatherOn && !weatherText.isEmpty() && !"time".equals(clockLayout)) {
+            text.setTypeface(tfRegular);
+            text.setTextSize(sp(13));
+            text.setLetterSpacing(0f);
+            text.setColor(theme.accent);
+            text.setAlpha((int) (215 * alpha));
+            canvas.drawText(weatherText, anchor, weatherBaseline, text);
+            text.setColor(cFg);
+        }
+    }
+
     /** Temperature line under the date. Empty string hides it. */
     void setWeather(String value) {
         String next = value == null ? "" : value;
@@ -243,6 +310,7 @@ final class HomeView extends View {
         statusH = systemBarHeight("status_bar_height");
         navH = systemBarHeight("navigation_bar_height");
         clockOn = Prefs.clock(ctx);
+        dateOn = Prefs.date(ctx);
         iconsOn = Prefs.icons(ctx);
         labelsOn = Prefs.labels(ctx);
         waveOn = Prefs.wave(ctx);
@@ -259,12 +327,33 @@ final class HomeView extends View {
         labelX = leftMargin + dp(64);
         headerX = dp(48);
 
-        clockBaseline = statusH + dp(197);
-        dateBaseline = statusH + dp(226);
-        // One extra line under the date when the temperature is shown, so the favorites
-        // column never starts on top of it.
-        weatherBaseline = statusH + dp(251);
-        favTop = statusH + dp(weatherOn ? 267 : 242.5f);
+        clockLayout = theme.clockLayout == null ? "classic" : theme.clockLayout;
+        clockAlign = theme.clockAlign == null ? "left" : theme.clockAlign;
+        contentLeft = leftMargin;
+        contentRight = waveLeft ? w - dp(46) : w - dp(72);
+
+        // Four clock arrangements, each with its own stack of lines underneath.
+        if ("stacked".equals(clockLayout)) {
+            dateBaseline = statusH + dp(150);
+            clockBaseline = statusH + dp(212);
+            weatherBaseline = statusH + dp(240);
+            favTop = statusH + dp(262);
+        } else if ("inline".equals(clockLayout)) {
+            clockBaseline = statusH + dp(197);
+            dateBaseline = clockBaseline;
+            weatherBaseline = statusH + dp(226);
+            favTop = statusH + dp(242.5f);
+        } else if ("time".equals(clockLayout)) {
+            clockBaseline = statusH + dp(197);
+            dateBaseline = clockBaseline;
+            weatherBaseline = statusH + dp(226);
+            favTop = statusH + dp(242.5f);
+        } else {
+            clockBaseline = statusH + dp(197);
+            dateBaseline = statusH + dp(226);
+            weatherBaseline = statusH + dp(251);
+            favTop = statusH + dp(weatherOn ? 267 : 242.5f);
+        }
 
         railX = w - dp(26);
         railTop = statusH + dp(295);
@@ -467,28 +556,7 @@ final class HomeView extends View {
         if (alpha <= 0.01f) return;
 
         if (clockOn) {
-            text.setTypeface(tfClock);
-            text.setTextAlign(Paint.Align.LEFT);
-            text.setTextSize(sp(52 * clockScale));
-            text.setLetterSpacing(clockSpacing);
-            text.setColor(cFg);
-            text.setAlpha((int) (246 * alpha));
-            canvas.drawText(clockText, leftMargin, clockBaseline, text);
-            text.setLetterSpacing(0f);
-
-            text.setTypeface(tfRegular);
-            text.setTextSize(sp(15));
-            text.setColor(cFg);
-            text.setAlpha((int) (205 * alpha));
-            canvas.drawText(dateText, leftMargin + dp(2), dateBaseline, text);
-
-            if (weatherOn && !weatherText.isEmpty()) {
-                text.setTypeface(tfRegular);
-                text.setTextSize(sp(13));
-                text.setColor(theme.accent);
-                text.setAlpha((int) (215 * alpha));
-                canvas.drawText(weatherText, leftMargin + dp(2), weatherBaseline, text);
-            }
+            drawClock(canvas, text, alpha);
         }
 
         if (favorites.isEmpty()) {

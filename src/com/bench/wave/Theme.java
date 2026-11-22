@@ -18,23 +18,33 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * A theme is a directory with a theme.json and, optionally, icons and fonts.
- *
- *   filesDir/themes/&lt;id&gt;/theme.json
- *   filesDir/themes/&lt;id&gt;/icons/&lt;package&gt;.png
- *   filesDir/themes/&lt;id&gt;/fonts/clock.ttf | apps.ttf | ui.ttf
+ * A theme is the whole look: colours, clock face and layout, icon pack, icon shape,
+ * which elements are on screen. Stored as one JSON object in prefs so the editor can
+ * change a single field without rewriting a file, and saved to
+ * filesDir/themes/&lt;id&gt;/theme.json when it is kept as a preset or exported.
  *
  * The built-ins live in code so the launcher always has one working look, even with the
  * theme folder empty or a half-written import on disk.
  */
 final class Theme {
 
-    static final String BUILTIN = "builtin";
+    static final String BUILTIN = "star-trail";
 
     private static final int MAX_ENTRY_BYTES = 4 * 1024 * 1024;
     private static final int MAX_TOTAL_BYTES = 24 * 1024 * 1024;
     private static final int MAX_ENTRIES = 400;
     private static final String TAG = "WaveTheme";
+
+    static final String[] SHAPES = {"none", "circle", "squircle", "rounded", "ring"};
+    static final String[] SHAPE_LABELS = {"Original", "Circle", "Squircle", "Rounded square", "Ring"};
+    static final String[] LAYOUTS = {"classic", "stacked", "inline", "time"};
+    static final String[] LAYOUT_LABELS = {"Classic", "Stacked", "Inline", "Time only"};
+    static final String[] ALIGNS = {"left", "center", "right"};
+    static final String[] ALIGN_LABELS = {"Left", "Centre", "Right"};
+    static final String[] FACES = {"thin", "light", "regular", "medium", "bold", "serif",
+            "serif-light", "mono", "condensed"};
+    static final String[] FACE_LABELS = {"Hairline", "Light", "Regular", "Medium", "Bold",
+            "Serif", "Serif light", "Mono", "Condensed"};
 
     String id = BUILTIN;
     String name = "Star Trail";
@@ -47,15 +57,29 @@ final class Theme {
     int dim = 0x7C7C8797;
     int accent = 0xFFAFC4DE;
 
-    String clockStyle = "thin";   // thin | serif | mono | bold | condensed
+    // Clock
+    String clockFace = "thin";
+    String clockLayout = "classic";
+    String clockAlign = "left";
     float clockScale = 1f;
     float clockSpacing = 0.02f;
 
+    // Icons
+    String iconPack = "";          // package of an installed icon pack, "" = the app's own
+    String iconShape = "none";
+    float iconScale = 1f;          // 0.6 .. 1.0, how much of the tile the glyph fills
+    int iconBg = 0xFF101620;       // fills the mask behind the glyph
     boolean iconDesaturate = false;
     int iconTint = 0xFFFFFFFF;
-    float iconTintStrength = 0.12f;
+    float iconTintStrength = 0f;
 
-    File dir; // null for built-ins
+    // Which elements are on screen
+    boolean showDate = true;
+    boolean showWeather = true;
+    boolean showLabels = true;
+    boolean showRail = true;
+
+    File dir; // preset folder, null for built-ins and unsaved drafts
 
     static final class Entry {
         final String id;
@@ -68,11 +92,42 @@ final class Theme {
         }
     }
 
+    Theme copy() {
+        Theme t = new Theme();
+        t.id = id;
+        t.name = name;
+        t.author = author;
+        t.light = light;
+        t.background = background;
+        t.foreground = foreground;
+        t.mid = mid;
+        t.dim = dim;
+        t.accent = accent;
+        t.clockFace = clockFace;
+        t.clockLayout = clockLayout;
+        t.clockAlign = clockAlign;
+        t.clockScale = clockScale;
+        t.clockSpacing = clockSpacing;
+        t.iconPack = iconPack;
+        t.iconShape = iconShape;
+        t.iconScale = iconScale;
+        t.iconBg = iconBg;
+        t.iconDesaturate = iconDesaturate;
+        t.iconTint = iconTint;
+        t.iconTintStrength = iconTintStrength;
+        t.showDate = showDate;
+        t.showWeather = showWeather;
+        t.showLabels = showLabels;
+        t.showRail = showRail;
+        t.dir = dir;
+        return t;
+    }
+
     // ------------------------------------------------------------------ built-ins
 
     static Theme builtin(String id) {
         Theme t = new Theme();
-        t.id = id == null ? "star-trail" : id;
+        t.id = id == null ? BUILTIN : id;
         if ("paper".equals(t.id)) {
             t.name = "Paper";
             t.light = true;
@@ -81,11 +136,12 @@ final class Theme {
             t.mid = 0xB015171C;
             t.dim = 0x7015171C;
             t.accent = 0xFF6D5B45;
-            t.clockStyle = "serif";
-            t.clockScale = 1f;
+            t.clockFace = "serif";
+            t.clockLayout = "stacked";
             t.clockSpacing = 0f;
-            t.iconDesaturate = false;
-            t.iconTintStrength = 0f;
+            t.iconShape = "rounded";
+            t.iconBg = 0xFFE6DFD2;
+            t.iconScale = 0.86f;
         } else if ("slate".equals(t.id)) {
             t.name = "Slate";
             t.background = 0xFF0F1418;
@@ -93,28 +149,55 @@ final class Theme {
             t.mid = 0xB0E6EDF3;
             t.dim = 0x6EE6EDF3;
             t.accent = 0xFF7FE3C0;
-            t.clockStyle = "mono";
+            t.clockFace = "mono";
+            t.clockLayout = "inline";
             t.clockScale = 0.96f;
             t.clockSpacing = -0.01f;
-            t.iconDesaturate = false;
+            t.iconShape = "circle";
+            t.iconBg = 0xFF1A2329;
+            t.iconScale = 0.88f;
+        } else if ("mono".equals(t.id)) {
+            t.name = "Mono";
+            t.background = 0xFF000000;
+            t.foreground = 0xFFFFFFFF;
+            t.mid = 0xB3FFFFFF;
+            t.dim = 0x66FFFFFF;
+            t.accent = 0xFFFFFFFF;
+            t.clockFace = "bold";
+            t.clockLayout = "classic";
+            t.clockSpacing = -0.02f;
+            t.iconShape = "circle";
+            t.iconBg = 0xFF000000;
+            t.iconScale = 0.82f;
+            t.iconDesaturate = true;
+            t.iconTint = 0xFFFFFFFF;
             t.iconTintStrength = 0f;
         } else {
-            // Star Trail: the ink-black starfield. Cool white type, thin clock, icons
-            // pulled to grey so the wallpaper stays the only colour on screen.
+            // Star Trail: the ink-black starfield. Cool white type, thin clock.
             t.name = "Star Trail";
             t.background = 0xFF05070C;
             t.foreground = 0xFFEDF1F7;
             t.mid = 0xB4B4BECC;
             t.dim = 0x7C7C8797;
             t.accent = 0xFFAFC4DE;
-            t.clockStyle = "thin";
-            t.clockScale = 1f;
+            t.clockFace = "thin";
+            t.clockLayout = "classic";
             t.clockSpacing = 0.02f;
-            // Icons keep their own colour; the wallpaper is the only other colour source.
+            t.iconShape = "none";
+            t.iconScale = 1f;
             t.iconDesaturate = false;
             t.iconTintStrength = 0f;
         }
         return t;
+    }
+
+    static List<String> builtinIds() {
+        List<String> out = new ArrayList<String>();
+        out.add("star-trail");
+        out.add("slate");
+        out.add("paper");
+        out.add("mono");
+        return out;
     }
 
     // ------------------------------------------------------------------ storage
@@ -127,9 +210,11 @@ final class Theme {
 
     static List<Entry> available(Context c) {
         List<Entry> out = new ArrayList<Entry>();
-        out.add(new Entry("star-trail", "Star Trail", true));
-        out.add(new Entry("slate", "Slate", true));
-        out.add(new Entry("paper", "Paper", true));
+        List<String> ids = builtinIds();
+        for (int i = 0; i < ids.size(); i++) {
+            Theme t = builtin(ids.get(i));
+            out.add(new Entry(ids.get(i), t.name, true));
+        }
 
         File[] dirs = themesDir(c).listFiles();
         if (dirs == null) return out;
@@ -144,25 +229,70 @@ final class Theme {
         return out;
     }
 
-    static String idFor(Context c) {
-        return Prefs.sp(c).getString(Prefs.K_THEME_ID, "star-trail");
-    }
-
+    /** The theme in use. Falls back to the built-in look on a corrupt or absent draft. */
     static Theme current(Context c) {
-        String id = idFor(c);
-        if ("star-trail".equals(id) || "slate".equals(id) || "paper".equals(id)) {
-            return builtin(id);
+        String raw = Prefs.sp(c).getString(Prefs.K_THEME_JSON, "");
+        if (raw != null && !raw.isEmpty()) {
+            Theme t = fromJson(raw);
+            if (t != null) return t;
         }
-        Theme t = fromDir(new File(themesDir(c), id));
-        return t != null ? t : builtin("star-trail");
+        return builtin(BUILTIN);
     }
 
+    /** Writes the draft straight into prefs. Used by the editor on every change. */
+    static void store(Context c, Theme t) {
+        Prefs.sp(c).edit().putString(Prefs.K_THEME_JSON, t.toJson().toString()).commit();
+    }
+
+    /** Applies a built-in or preset: colours, fonts, and which elements are visible. */
     static void apply(Context c, String id) {
-        Prefs.sp(c).edit().putString(Prefs.K_THEME_ID, id).apply();
-        Theme t = current(c);
+        Theme t;
+        if (builtinIds().contains(id)) {
+            t = builtin(id);
+        } else {
+            t = fromDir(new File(themesDir(c), id));
+            if (t == null) t = builtin(BUILTIN);
+        }
+        store(c, t);
         applyFonts(c, t);
         Typefaces.invalidate();
+        syncVisibility(c, t);
         Prefs.bumpLibrary(c);
+    }
+
+    /** Pushes the theme's element switches into the prefs the home view reads. */
+    static void syncVisibility(Context c, Theme t) {
+        Prefs.sp(c).edit()
+                .putBoolean("date", t.showDate)
+                .putBoolean("weather", t.showWeather)
+                .putBoolean(Prefs.K_LABELS, t.showLabels)
+                .putBoolean(Prefs.K_WAVE, t.showRail)
+                .apply();
+    }
+
+    /** Reads the element switches back off the prefs into a draft. */
+    static void pullVisibility(Context c, Theme t) {
+        SharedPreferences p = Prefs.sp(c);
+        t.showDate = p.getBoolean("date", t.showDate);
+        t.showWeather = p.getBoolean("weather", t.showWeather);
+        t.showLabels = p.getBoolean(Prefs.K_LABELS, t.showLabels);
+        t.showRail = p.getBoolean(Prefs.K_WAVE, t.showRail);
+    }
+
+    /** Saves the draft as a preset folder and makes it the active theme. */
+    static Theme save(Context c, Theme t, String presetName) {
+        Theme out = t.copy();
+        out.name = presetName;
+        out.id = slug(presetName);
+        File target = new File(themesDir(c), out.id);
+        deleteTree(target);
+        if (!target.mkdirs()) return null;
+        out.dir = target;
+        if (!write(new File(target, "theme.json"), out.toJson().toString())) return null;
+        store(c, out);
+        syncVisibility(c, out);
+        Prefs.bumpLibrary(c);
+        return out;
     }
 
     /** Copies a theme's font files into the launcher's own font slots. */
@@ -213,69 +343,151 @@ final class Theme {
             Typeface f = Typefaces.forRole(c, Prefs.K_FONT_CLOCK);
             if (f != null) return f;
         }
-        Theme t = current(c);
-        if ("serif".equals(t.clockStyle)) return Typeface.create("serif", Typeface.NORMAL);
-        if ("mono".equals(t.clockStyle)) return Typeface.create("monospace", Typeface.NORMAL);
-        if ("bold".equals(t.clockStyle)) return Typeface.create("sans-serif", Typeface.BOLD);
-        if ("condensed".equals(t.clockStyle)) {
-            return Typeface.create("sans-serif-condensed", Typeface.NORMAL);
-        }
+        return faceTypeface(current(c).clockFace);
+    }
+
+    static Typeface faceTypeface(String face) {
+        if ("serif".equals(face)) return Typeface.create("serif", Typeface.NORMAL);
+        if ("serif-light".equals(face)) return Typeface.create("serif", Typeface.NORMAL);
+        if ("mono".equals(face)) return Typeface.create("monospace", Typeface.NORMAL);
+        if ("bold".equals(face)) return Typeface.create("sans-serif", Typeface.BOLD);
+        if ("medium".equals(face)) return Typeface.create("sans-serif-medium", Typeface.NORMAL);
+        if ("regular".equals(face)) return Typeface.create("sans-serif", Typeface.NORMAL);
+        if ("light".equals(face)) return Typeface.create("sans-serif-light", Typeface.NORMAL);
+        if ("condensed".equals(face)) return Typeface.create("sans-serif-condensed", Typeface.NORMAL);
         return Typeface.create("sans-serif-thin", Typeface.NORMAL);
     }
 
-    // ------------------------------------------------------------------ parse
+    // ------------------------------------------------------------------ json
+
+    JSONObject toJson() {
+        JSONObject root = new JSONObject();
+        try {
+            root.put("name", name);
+            root.put("author", author);
+            root.put("light", light);
+
+            JSONObject colors = new JSONObject();
+            colors.put("background", hex(background));
+            colors.put("foreground", hex(foreground));
+            colors.put("mid", hex(mid));
+            colors.put("dim", hex(dim));
+            colors.put("accent", hex(accent));
+            root.put("colors", colors);
+
+            JSONObject clock = new JSONObject();
+            clock.put("face", clockFace);
+            clock.put("style", clockFace); // older files used "style"
+            clock.put("layout", clockLayout);
+            clock.put("align", clockAlign);
+            clock.put("scale", round(clockScale));
+            clock.put("spacing", round(clockSpacing));
+            root.put("clock", clock);
+
+            JSONObject icons = new JSONObject();
+            icons.put("pack", iconPack);
+            icons.put("shape", iconShape);
+            icons.put("scale", round(iconScale));
+            icons.put("background", hex(iconBg));
+            icons.put("desaturate", iconDesaturate);
+            icons.put("tint", hex(iconTint));
+            icons.put("tintStrength", round(iconTintStrength));
+            root.put("icons", icons);
+
+            JSONObject show = new JSONObject();
+            show.put("date", showDate);
+            show.put("weather", showWeather);
+            show.put("labels", showLabels);
+            show.put("rail", showRail);
+            root.put("show", show);
+        } catch (Exception ignored) {
+            // JSONObject.put only throws on non-finite doubles; nothing here can.
+        }
+        return root;
+    }
+
+    private static double round(float v) { return Math.round(v * 1000d) / 1000d; }
+
+    static String hex(int argb) {
+        return String.format("#%08X", argb);
+    }
+
+    private static Theme fromJson(String raw) {
+        try {
+            return parse(new JSONObject(raw));
+        } catch (Exception ex) {
+            Log.w(TAG, "bad theme json", ex);
+            return null;
+        }
+    }
 
     private static Theme fromDir(File dir) {
         File json = new File(dir, "theme.json");
         if (!json.isFile()) return null;
         String raw = readText(json, 64 * 1024);
         if (raw == null) return null;
-        try {
-            JSONObject root = new JSONObject(raw);
-            Theme t = new Theme();
-            t.id = dir.getName();
-            t.dir = dir;
-            t.name = root.optString("name", dir.getName());
-            t.author = root.optString("author", "");
-            t.light = root.optBoolean("light", false);
+        Theme t = fromJson(raw);
+        if (t == null) return null;
+        t.id = dir.getName();
+        t.dir = dir;
+        return t;
+    }
 
-            JSONObject colors = root.optJSONObject("colors");
-            if (colors != null) {
-                t.background = colour(colors, "background", t.background);
-                t.foreground = colour(colors, "foreground", t.foreground);
-                t.mid = colour(colors, "mid", t.mid);
-                t.dim = colour(colors, "dim", t.dim);
-                t.accent = colour(colors, "accent", t.accent);
-            }
+    private static Theme parse(JSONObject root) throws Exception {
+        Theme t = new Theme();
+        t.name = root.optString("name", "Untitled");
+        t.author = root.optString("author", "");
+        t.light = root.optBoolean("light", false);
 
-            JSONObject clock = root.optJSONObject("clock");
-            if (clock != null) {
-                t.clockStyle = clock.optString("style", t.clockStyle);
-                t.clockScale = clamp((float) clock.optDouble("scale", t.clockScale), 0.7f, 1.4f);
-                t.clockSpacing = clamp((float) clock.optDouble("spacing", t.clockSpacing),
-                        -0.05f, 0.3f);
-            }
-
-            JSONObject icons = root.optJSONObject("icons");
-            if (icons != null) {
-                t.iconDesaturate = icons.optBoolean("desaturate", t.iconDesaturate);
-                t.iconTint = colour(icons, "tint", t.iconTint);
-                t.iconTintStrength = clamp(
-                        (float) icons.optDouble("tintStrength", t.iconTintStrength), 0f, 1f);
-            }
-            return t;
-        } catch (Exception ex) {
-            Log.w(TAG, "bad theme.json in " + dir.getName(), ex);
-            return null;
+        JSONObject colors = root.optJSONObject("colors");
+        if (colors != null) {
+            t.background = colour(colors, "background", t.background);
+            t.foreground = colour(colors, "foreground", t.foreground);
+            t.mid = colour(colors, "mid", t.mid);
+            t.dim = colour(colors, "dim", t.dim);
+            t.accent = colour(colors, "accent", t.accent);
         }
+
+        JSONObject clock = root.optJSONObject("clock");
+        if (clock != null) {
+            t.clockFace = clock.optString("face", clock.optString("style", t.clockFace));
+            t.clockLayout = clock.optString("layout", t.clockLayout);
+            t.clockAlign = clock.optString("align", t.clockAlign);
+            t.clockScale = clamp((float) clock.optDouble("scale", t.clockScale), 0.7f, 1.4f);
+            t.clockSpacing = clamp((float) clock.optDouble("spacing", t.clockSpacing),
+                    -0.05f, 0.3f);
+        }
+
+        JSONObject icons = root.optJSONObject("icons");
+        if (icons != null) {
+            t.iconPack = icons.optString("pack", t.iconPack);
+            t.iconShape = icons.optString("shape", t.iconShape);
+            t.iconScale = clamp((float) icons.optDouble("scale", t.iconScale), 0.5f, 1f);
+            t.iconBg = colour(icons, "background", t.iconBg);
+            t.iconDesaturate = icons.optBoolean("desaturate", t.iconDesaturate);
+            t.iconTint = colour(icons, "tint", t.iconTint);
+            t.iconTintStrength = clamp(
+                    (float) icons.optDouble("tintStrength", t.iconTintStrength), 0f, 1f);
+        }
+
+        JSONObject show = root.optJSONObject("show");
+        if (show != null) {
+            t.showDate = show.optBoolean("date", t.showDate);
+            t.showWeather = show.optBoolean("weather", t.showWeather);
+            t.showLabels = show.optBoolean("labels", t.showLabels);
+            t.showRail = show.optBoolean("rail", t.showRail);
+        }
+        return t;
     }
 
     private static int colour(JSONObject o, String key, int fallback) {
         String v = o.optString(key, null);
         if (v == null) return fallback;
         try {
-            return (int) Long.parseLong(v.replace("#", ""), 16)
-                    | (v.length() <= 7 ? 0xFF000000 : 0);
+            String body = v.replace("#", "");
+            long parsed = Long.parseLong(body, 16);
+            if (body.length() <= 6) parsed |= 0xFF000000L;
+            return (int) parsed;
         } catch (NumberFormatException ex) {
             return fallback;
         }
@@ -379,6 +591,55 @@ final class Theme {
         return out;
     }
 
+    /** Writes the active theme out as a zip: theme.json plus any preset icons and fonts. */
+    static boolean exportZip(Context c, Theme t, File target) {
+        FileOutputStream fos = null;
+        java.util.zip.ZipOutputStream zos = null;
+        try {
+            fos = new FileOutputStream(target);
+            zos = new java.util.zip.ZipOutputStream(fos);
+            zos.putNextEntry(new ZipEntry("theme.json"));
+            zos.write(t.toJson().toString(2).getBytes("UTF-8"));
+            zos.closeEntry();
+
+            if (t.dir != null) {
+                addTree(zos, t.dir, "", "theme.json");
+            }
+            zos.finish();
+            return true;
+        } catch (Exception ex) {
+            Log.w(TAG, "export failed", ex);
+            return false;
+        } finally {
+            try { if (zos != null) zos.close(); } catch (Exception ignored) { }
+            try { if (fos != null) fos.close(); } catch (Exception ignored) { }
+        }
+    }
+
+    private static void addTree(java.util.zip.ZipOutputStream zos, File dir, String prefix,
+                                String skip) throws Exception {
+        File[] kids = dir.listFiles();
+        if (kids == null) return;
+        for (int i = 0; i < kids.length; i++) {
+            String path = prefix + kids[i].getName();
+            if (path.equals(skip)) continue;
+            if (kids[i].isDirectory()) {
+                addTree(zos, kids[i], path + "/", skip);
+                continue;
+            }
+            zos.putNextEntry(new ZipEntry(path));
+            InputStream in = new java.io.FileInputStream(kids[i]);
+            try {
+                byte[] buf = new byte[16 * 1024];
+                int read;
+                while ((read = in.read(buf)) > 0) zos.write(buf, 0, read);
+            } finally {
+                in.close();
+            }
+            zos.closeEntry();
+        }
+    }
+
     private static String clean(String name) {
         if (name == null) return null;
         String path = name.replace('\\', '/');
@@ -441,6 +702,19 @@ final class Theme {
             return false;
         } finally {
             try { if (in != null) in.close(); } catch (Exception ignored) { }
+            try { if (out != null) out.close(); } catch (Exception ignored) { }
+        }
+    }
+
+    private static boolean write(File f, String text) {
+        OutputStream out = null;
+        try {
+            out = new FileOutputStream(f);
+            out.write(text.getBytes("UTF-8"));
+            return true;
+        } catch (Exception ex) {
+            return false;
+        } finally {
             try { if (out != null) out.close(); } catch (Exception ignored) { }
         }
     }
