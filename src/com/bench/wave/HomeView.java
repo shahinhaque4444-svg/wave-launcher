@@ -77,6 +77,12 @@ final class HomeView extends View {
     };
 
     private Typeface tfClock, tfRegular, tfMedium;
+    private Theme theme;
+    private float clockScale = 1f;
+    private float clockSpacing = 0.02f;
+    private float weatherBaseline;
+    private String weatherText = "";
+    private boolean weatherOn;
 
     private boolean dark = true;
     private boolean searchMode;
@@ -171,6 +177,21 @@ final class HomeView extends View {
         invalidate();
     }
 
+    /** Temperature line under the date. Empty string hides it. */
+    void setWeather(String value) {
+        String next = value == null ? "" : value;
+        if (next.equals(weatherText)) return;
+        weatherText = next;
+        invalidate();
+    }
+
+    /** Re-reads the theme and throws away every cached icon drawn in the old one. */
+    void refreshTheme() {
+        icons.setTheme(Theme.current(getContext()));
+        dirty = true;
+        invalidate();
+    }
+
     void markDirty() {
         dirty = true;
         rebuildIfNeeded();
@@ -207,13 +228,17 @@ final class HomeView extends View {
         if (w == 0 || h == 0) return;
 
         Context ctx = getContext();
-        dark = Prefs.dark(ctx);
-        cFg = dark ? 0xFFF4F6FA : 0xFF0B1016;
-        cFgMid = dark ? 0xB0F4F6FA : 0x990B1016;
-        cFgDim = dark ? 0x5CF4F6FA : 0x550B1016;
+        theme = Theme.current(ctx);
+        dark = !theme.light;
+        cFg = theme.foreground;
+        cFgMid = theme.mid;
+        cFgDim = theme.dim;
         cLine = dark ? 0x14FFFFFF : 0x10000000;
         cFabFg = dark ? 0xFF22262C : 0xFF2A2F36;
         scrimBase = Prefs.dim(ctx) / 100f;
+        clockScale = theme.clockScale;
+        clockSpacing = theme.clockSpacing;
+        weatherOn = Prefs.weather(ctx);
 
         statusH = systemBarHeight("status_bar_height");
         navH = systemBarHeight("navigation_bar_height");
@@ -236,7 +261,10 @@ final class HomeView extends View {
 
         clockBaseline = statusH + dp(197);
         dateBaseline = statusH + dp(226);
-        favTop = statusH + dp(242.5f);
+        // One extra line under the date when the temperature is shown, so the favorites
+        // column never starts on top of it.
+        weatherBaseline = statusH + dp(251);
+        favTop = statusH + dp(weatherOn ? 267 : 242.5f);
 
         railX = w - dp(26);
         railTop = statusH + dp(295);
@@ -247,7 +275,7 @@ final class HomeView extends View {
 
         // Roles are re-read here, not in the constructor: a font picked in settings has
         // to land the next time the launcher comes forward.
-        tfClock = Typefaces.clock(ctx);
+        tfClock = Theme.clockTypeface(ctx);
         tfRegular = Typefaces.apps(ctx);
         tfMedium = Typeface.create(tfRegular, Typeface.BOLD);
 
@@ -441,16 +469,26 @@ final class HomeView extends View {
         if (clockOn) {
             text.setTypeface(tfClock);
             text.setTextAlign(Paint.Align.LEFT);
-            text.setTextSize(sp(52));
+            text.setTextSize(sp(52 * clockScale));
+            text.setLetterSpacing(clockSpacing);
             text.setColor(cFg);
             text.setAlpha((int) (246 * alpha));
             canvas.drawText(clockText, leftMargin, clockBaseline, text);
+            text.setLetterSpacing(0f);
 
             text.setTypeface(tfRegular);
             text.setTextSize(sp(15));
             text.setColor(cFg);
             text.setAlpha((int) (205 * alpha));
             canvas.drawText(dateText, leftMargin + dp(2), dateBaseline, text);
+
+            if (weatherOn && !weatherText.isEmpty()) {
+                text.setTypeface(tfRegular);
+                text.setTextSize(sp(13));
+                text.setColor(theme.accent);
+                text.setAlpha((int) (215 * alpha));
+                canvas.drawText(weatherText, leftMargin + dp(2), weatherBaseline, text);
+            }
         }
 
         if (favorites.isEmpty()) {
@@ -775,8 +813,11 @@ final class HomeView extends View {
                 if (fabRect.contains(downX, downY)) return true;
 
                 if (mode == MODE_HOME) {
+                    // Long press always arms: on a favorite it opens the app sheet, on empty
+                    // space it opens settings. Arming only on empty space left the sheet
+                    // reachable from the app list and nowhere else.
                     pressFav = favoriteAt(downY);
-                    if (pressFav < 0) handler.postDelayed(longPress, ViewConfiguration.getLongPressTimeout());
+                    handler.postDelayed(longPress, ViewConfiguration.getLongPressTimeout());
                 } else {
                     pressRow = appRowAt(downY);
                     handler.postDelayed(longPress, ViewConfiguration.getLongPressTimeout());

@@ -157,12 +157,23 @@ public class HomeActivity extends Activity implements HomeView.Host {
         applyBarIcons();
         applyPanelTheme();
         applySearchInsets();
+
+        // Always rebuild on the way back in. The launcher is often in the background while
+        // an app is installed, so no package broadcast ever arrives; the query is cheap and
+        // it runs on the worker, never on the draw thread.
         long revision = Prefs.libraryRevision(this);
-        if (revision != libraryRevision) {
-            // Settings or a package event changed the library: rebuild from the source of truth.
-            libraryRevision = revision;
-            appsLoaded = false;
-        }
+        libraryRevision = revision;
+        appsLoaded = false;
+
+        searchIcons.setTheme(Theme.current(this));
+        home.setWeather(Prefs.weather(this) ? Weather.cached(this) : "");
+        Weather.refresh(this, false, new Weather.Done() {
+            @Override public void onWeather(String text) {
+                if (!isFinishing() && home != null) {
+                    home.setWeather(Prefs.weather(HomeActivity.this) ? text : "");
+                }
+            }
+        });
         if (reorderPending) {
             reorderPending = false;
             repo.reorder();
@@ -252,7 +263,7 @@ public class HomeActivity extends Activity implements HomeView.Host {
         flags |= View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
-        if (Prefs.dark(this)) flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        if (!Theme.current(this).light) flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
         else flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
         getWindow().getDecorView().setSystemUiVisibility(flags);
     }
@@ -260,7 +271,7 @@ public class HomeActivity extends Activity implements HomeView.Host {
     // ---------------------------------------------------------------- search
 
     private void buildSearchPanel() {
-        panelDark = Prefs.dark(this);
+        panelDark = !Theme.current(this).light;
         searchPanel = new FrameLayout(this);
         searchPanel.setBackgroundColor(Color.TRANSPARENT);
         searchPanel.setClickable(true);
@@ -390,7 +401,7 @@ public class HomeActivity extends Activity implements HomeView.Host {
 
     private void applyPanelTheme() {
         if (searchPanel == null) return;
-        boolean isDark = Prefs.dark(this);
+        boolean isDark = !Theme.current(this).light;
         panelDark = isDark;
         searchPanel.setBackgroundColor(Color.TRANSPARENT);
 
@@ -736,6 +747,30 @@ public class HomeActivity extends Activity implements HomeView.Host {
      * system prompt, and reports back through {@link #ACTION_UNINSTALLED}.
      */
     private void uninstall(AppEntry e) {
+        Uri target = Uri.parse("package:" + e.pkg);
+
+        // 1. The system uninstaller, named explicitly. Implicit ACTION_DELETE is routed by
+        //    the package manager and some skins answer it with nothing at all; naming the
+        //    activity skips that routing entirely.
+        String[][] installers = {
+                {"com.android.packageinstaller", "com.android.packageinstaller.UninstallerActivity"},
+                {"com.google.android.packageinstaller", "com.google.android.packageinstaller.UninstallerActivity"},
+                {"com.miui.packageinstaller", "com.miui.packageinstaller.UninstallerActivity"},
+        };
+        for (int i = 0; i < installers.length; i++) {
+            try {
+                Intent direct = new Intent(Intent.ACTION_DELETE, target);
+                direct.setClassName(installers[i][0], installers[i][1]);
+                direct.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(direct);
+                return;
+            } catch (Throwable ignored) {
+                // Wrong package for this build of Android; try the next shape.
+            }
+        }
+
+        // 2. A package-installer session. Works on builds that grant it; throws
+        //    SecurityException (DELETE_PACKAGES) on the rest, which is why it is second.
         try {
             PackageInstaller installer = getPackageManager().getPackageInstaller();
             Intent callback = new Intent(ACTION_UNINSTALLED).setPackage(getPackageName());
@@ -744,15 +779,20 @@ public class HomeActivity extends Activity implements HomeView.Host {
             PendingIntent pending = PendingIntent.getBroadcast(
                     this, e.pkg.hashCode(), callback, flags);
             installer.uninstall(e.pkg, pending.getIntentSender());
-        } catch (Throwable primary) {
-            try {
-                Intent i = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + e.pkg));
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(i);
-            } catch (Throwable fallback) {
-                Toast.makeText(this, "This device will not uninstall apps from here",
-                        Toast.LENGTH_SHORT).show();
-            }
+            return;
+        } catch (Throwable session) {
+            android.util.Log.w("WaveUninstall", "session refused for " + e.pkg, session);
+        }
+
+        // 3. Plain hand-off, last resort.
+        try {
+            Intent i = new Intent(Intent.ACTION_DELETE, target);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Throwable fallback) {
+            android.util.Log.e("WaveUninstall", "no uninstaller for " + e.pkg, fallback);
+            Toast.makeText(this, "This device will not uninstall apps from here",
+                    Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -888,7 +928,7 @@ public class HomeActivity extends Activity implements HomeView.Host {
                     ViewGroup.LayoutParams.MATCH_PARENT, (int) dp(57)));
 
             AppEntry e = results.get(position);
-            boolean isDark = Prefs.dark(HomeActivity.this);
+            boolean isDark = !Theme.current(HomeActivity.this).light;
             row.name.setTextColor(isDark ? 0xFFF2F5FA : 0xFF0C1116);
             row.name.setText(e.label);
 

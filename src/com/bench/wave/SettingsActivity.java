@@ -33,15 +33,12 @@ import android.widget.Toast;
  */
 public class SettingsActivity extends Activity {
 
-    private static final int BG = 0xFF0B0E13;
-    private static final int CARD = 0xFF151A21;
-    private static final int FG = 0xFFEDF1F7;
-    private static final int DIM = 0xFF8A94A6;
-    private static final int ACCENT = 0xFF7FB3FF;
+    private int BG, CARD, FG, DIM, ACCENT;
     private static final int DANGER = 0xFFFF7A7A;
-    private static final int HAIRLINE = 0x14FFFFFF;
+    private int HAIRLINE;
 
     private static final int REQ_FONT = 51;
+    private static final int REQ_THEME = 52;
 
     private AppRepo repo;
     private SharedPreferences prefs;
@@ -55,6 +52,7 @@ public class SettingsActivity extends Activity {
         repo = new AppRepo(this);
         repo.load();
         prefs = Prefs.sp(this);
+        palette();
 
         scroll = new ScrollView(this);
         scroll.setBackgroundColor(BG);
@@ -73,9 +71,30 @@ public class SettingsActivity extends Activity {
         Typefaces.apply(this, scroll);
     }
 
+    /** Screen colours come from the active theme, so settings match the launcher. */
+    private void palette() {
+        Theme t = Theme.current(this);
+        BG = t.background;
+        CARD = t.light ? 0xFFFBF9F5 : blend(t.background, 0xFFFFFFFF, 0.06f);
+        FG = t.foreground;
+        DIM = t.mid;
+        ACCENT = t.accent;
+        HAIRLINE = t.light ? 0x14000000 : 0x14FFFFFF;
+    }
+
+    private static int blend(int base, int other, float amount) {
+        int br = (base >> 16) & 0xFF, bg = (base >> 8) & 0xFF, bb = base & 0xFF;
+        int or_ = (other >> 16) & 0xFF, og = (other >> 8) & 0xFF, ob = other & 0xFF;
+        int r = Math.round(br + (or_ - br) * amount);
+        int g = Math.round(bg + (og - bg) * amount);
+        int b = Math.round(bb + (ob - bb) * amount);
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
+        palette();
         if (repo != null) repo.load();
         if (column != null) {
             build();
@@ -96,7 +115,7 @@ public class SettingsActivity extends Activity {
         column.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("v1.0  \u00b7  com.bench.wave");
+        sub.setText("v1.2  \u00b7  com.bench.wave");
         sub.setTextSize(11.5f);
         sub.setTextColor(DIM);
         sub.setPadding(0, dp(6), 0, 0);
@@ -115,17 +134,13 @@ public class SettingsActivity extends Activity {
         header("Appearance");
         LinearLayout card = card();
 
-        row(card, "Theme", themeName(Prefs.themeMode(this)), new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                final String[] names = {"Follow system", "Dark", "Light"};
-                choose("Theme", names, Prefs.themeMode(SettingsActivity.this),
-                        new Choice() {
-                    @Override public void onPick(int which) {
-                        prefs.edit().putInt(Prefs.K_THEME, which).apply();
-                        build();
-                    }
-                });
-            }
+        row(card, "Theme", Theme.current(this).name, new View.OnClickListener() {
+            @Override public void onClick(View v) { pickTheme(); }
+        });
+        divider(card);
+        action(card, "Import theme", "A .zip with a theme.json inside", false,
+                new View.OnClickListener() {
+            @Override public void onClick(View v) { pickThemeZip(); }
         });
         divider(card);
         slider(card, "Text size", Prefs.K_SCALE, 85, 135, 100, "%");
@@ -141,6 +156,8 @@ public class SettingsActivity extends Activity {
         toggle(card, "App icons", "Draw the icon beside each name", Prefs.K_ICONS, true);
         divider(card);
         toggle(card, "Favorite labels", "Show the name under a favorite", Prefs.K_LABELS, true);
+        divider(card);
+        toggle(card, "Weather", "Temperature in Celsius under the clock", "weather", true);
     }
 
     private void buildAppList() {
@@ -469,6 +486,55 @@ public class SettingsActivity extends Activity {
         return new RippleDrawable(ColorStateList.valueOf(0x1AFFFFFF), content, null);
     }
 
+    // ------------------------------------------------------------------ themes
+
+    private void pickTheme() {
+        final java.util.List<Theme.Entry> entries = Theme.available(this);
+        String[] names = new String[entries.size()];
+        for (int i = 0; i < entries.size(); i++) {
+            Theme.Entry e = entries.get(i);
+            names[i] = e.name + (e.builtin ? "" : "  (imported)");
+        }
+        AlertDialog.Builder b = new AlertDialog.Builder(this);
+        b.setTitle("Theme");
+        b.setItems(names, new DialogInterface.OnClickListener() {
+            @Override public void onClick(DialogInterface d, int which) {
+                Theme.Entry e = entries.get(which);
+                Theme.apply(SettingsActivity.this, e.id);
+                palette();
+                build();
+                Typefaces.apply(SettingsActivity.this, scroll);
+                toast(e.name + " applied");
+            }
+        });
+        b.show();
+    }
+
+    private void pickThemeZip() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivityForResult(intent, REQ_THEME);
+        } catch (ActivityNotFoundException ex) {
+            toast("No file picker on this device");
+        }
+    }
+
+    private void importTheme(Uri uri) {
+        try {
+            Theme imported = Theme.importZip(this, uri, uri.getLastPathSegment());
+            Theme.apply(this, imported.id);
+            palette();
+            build();
+            Typefaces.apply(this, scroll);
+            toast(imported.name + " imported and applied");
+        } catch (Exception ex) {
+            toast("That zip is not a theme: " + ex.getMessage());
+        }
+    }
+
     // ------------------------------------------------------------------ fonts
 
     private void fontDialog(final String key) {
@@ -509,7 +575,15 @@ public class SettingsActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQ_FONT || resultCode != RESULT_OK || data == null) return;
+        if (resultCode != RESULT_OK || data == null) return;
+
+        if (requestCode == REQ_THEME) {
+            Uri themeUri = data.getData();
+            if (themeUri != null) importTheme(themeUri);
+            return;
+        }
+
+        if (requestCode != REQ_FONT) return;
         Uri uri = data.getData();
         String key = pendingFontKey;
         pendingFontKey = null;
